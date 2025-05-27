@@ -1,4 +1,5 @@
 import pytest
+import re
 from playwright.sync_api import Page, expect
 
 @pytest.fixture
@@ -65,9 +66,44 @@ def check_cart_total_price(page: Page, product_count:int):
 	assert str(total_price)== page.locator("h3#totalp").inner_text(), f"Incorrect total price, actual total price={total_price}"
 
 
-def test_01_select_category_without_login(page: Page):
+def delete_from_cart_page(page: Page, product_name:str):
+	rows = page.locator("tr.success")
+	count_before_deleting = rows.count()
+	delete_cell=None
+	for i in range(rows.count()):
+		cell_product = rows.nth(i).locator("td:nth-child(2)")
+		if product_name in cell_product.inner_text().strip():
+			delete_cell = rows.nth(i).locator("td:nth-child(4)")
+			delete_cell.locator("text=Delete").click()
+	page.wait_for_timeout(3000)
+	rows = page.locator("tr.success")
+	assert rows.count() == count_before_deleting -1, f"Total cart item should be {rows.count()}"
 
-	
+def item_not_found_after_delete_from_cart(page: Page, product_name:str):
+	assert not page.is_visible(f"text={product_name}")
+
+def total_price_from_cart(page: Page):
+	rows = page.locator("tr.success")
+	total_price = 0
+	for i in range(rows.count()):
+		total_price += int(rows.nth(i).locator("td:nth-child(3)").inner_text().strip())
+	return total_price
+
+
+def get_the_product_price(page: Page,product_category:str,product_name:str):
+	goto_Home_page(page)
+	page.get_by_role("link", name=f"{product_category}").click()
+	page.get_by_role("link", name=f"{product_name}").click()
+	page.wait_for_timeout(3000)
+	price_str = page.locator('h3.price-container').inner_text().strip()
+	price_num = re.search(r'\d+',price_str).group()
+	return int(price_num)
+
+
+
+
+# @pytest.mark.skip(reason="temporary")
+def test_01_select_category_without_login(page: Page):
 	alert_info = add_to_cart_action(page, "Phones", "Nokia lumia")
 	cart_add_dialog_assertion(alert_info)
 	
@@ -86,7 +122,24 @@ def test_01_select_category_without_login(page: Page):
 	check_cart_page_for_products(page,"Nokia lumia")
 	
 	check_cart_total_price(page,4)
-	
-	
+
+
+def test_02_delete_and_update_cart_without_login(page: Page):
+	add_to_cart_action(page, "Phones", "Nokia lumia")
+	add_to_cart_action(page, "Laptops", "Sony vaio i7")
+	add_to_cart_action(page, "Monitors", "Apple monitor")
+
+	check_cart_page_for_products(page,"Sony vaio i7")
+	check_cart_page_for_products(page,"Nokia lumia")
+	check_cart_page_for_products(page,"Apple monitor")
+
+	total_price_before_deleting = total_price_from_cart(page)
+
+	delete_from_cart_page(page,"Sony vaio i7")
+	item_not_found_after_delete_from_cart(page,"Sony vaio i7")
+
+	total_price_after_deleting = total_price_from_cart(page)
+	price_of_deleting_product = get_the_product_price(page, "Laptops","Sony vaio i7")
+	assert total_price_before_deleting-price_of_deleting_product==total_price_after_deleting, "price not updated from cart"
 
 

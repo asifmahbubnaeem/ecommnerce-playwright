@@ -18,7 +18,6 @@ signUp_userName=""
 def signup_credentials():
 	return {}
 
-
 def test_01_login_withInvalid_credentials(page:Page):
 
 	# with sync_playwright() as p:
